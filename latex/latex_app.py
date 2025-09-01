@@ -1,27 +1,8 @@
 import streamlit as st
-import subprocess
 import json
+import re
 
 st.set_page_config(page_title="LaTeX Learning App", page_icon="📝", layout="wide")
-
-# -----------------------------
-# LLM via Ollama CLI
-# -----------------------------
-OLLAMA_MODEL = "llama3"
-
-def ask_llm_ollama(prompt: str, model: str = OLLAMA_MODEL):
-    try:
-        result = subprocess.run(
-            ["ollama", "run", model, prompt],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        st.error("⚠️ AI model error. Please check your Ollama setup.")
-        print(f"Ollama error: {e.stderr}")  # Logs for debugging
-        return ""
 
 # -----------------------------
 # Styles
@@ -66,9 +47,6 @@ def render_latex(s: str):
     except Exception as e:
         st.error(f"⚠️ LaTeX rendering error: {e}")
 
-# ==============================
-# Shared Topics & Quiz Bank
-# ==============================
 # ==============================
 # Shared Topics & Quiz Bank
 # ==============================
@@ -241,9 +219,9 @@ QUIZ = {
     "Basics": [
         {"q": "Which command defines the document class?", "a": r"\documentclass{article}", "options": [r"\begin{document}", r"\documentclass{article}", r"\maketitle", r"\usepackage{article}"]},
         {"q": "Which environment encloses the document body?", "a": r"\begin{document}...\end{document}", "options": [r"\begin{body}...\end{body}", r"\begin{text}...\end{text}", r"\begin{document}...\end{document}", r"\document{...}"]},
-        {"q": "What symbol starts a comment?", "a": r"%", "options": ["#", "%", "//", "$"]},
+        {"q": "What symbol starts a comment?", "a": r"%", "options": [ ".", "%", "//", "$"]},
         {"q": "Minimal hello world class line?", "a": r"\documentclass{article}", "options": [r"\document{article}", r"\documentclass{article}", r"\class{article}", r"\usepackage{article}"]},
-        {"q": "Write a TODO comment.", "a": r"% TODO", "options": [r"\/TODO", r"% TODO", r"$ TODO", r"# TODO"]},
+        {"q": "Write a TODO comment.", "a": r"% TODO", "options": [r"\/ TODO", r"% TODO", r"$ TODO", r"# TODO"]},
     ],
     "Math Mode": [
         {"q": "Inline math delimiters?", "a": r"$...$", "options": [r"$...$", r"$$...$$", r"\(...\)", r"\[...\]"]},
@@ -348,83 +326,41 @@ if section == "Home":
 **Learn, practice, and test** your LaTeX skills — all in one place.
 
 **What you can do:**
-- 🖋 **Mini Compiler**: Type LaTeX and see output instantly.
-- 📖 **Teacher**: Explore topics with notes and try examples side-by-side.
-- 🎯 **Quiz**: Practice questions per topic with instant feedback and a running score.
-- ➕ **Generate New Questions**: Get fresh questions automatically via AI.
+- 🖋 Mini Compiler: Type LaTeX and see output instantly.
+- 📖 Teacher: Explore topics with notes and try examples side-by-side.
+- 🎯 Quiz: Practice questions per topic with instant feedback and a running score.
         """)
     with colB:
         st.info("Quick Start")
-        st.markdown("- Go to **Mini Compiler** and paste any LaTeX.\n- Visit **Teacher** to learn a topic, then **Quiz** it!")
+        st.markdown("- Go to Mini Compiler and paste any LaTeX.\n- Visit Teacher to learn a topic, then Quiz it!")
 
 # -----------------------------
 # Mini Compiler
 # -----------------------------
 elif section == "Mini Compiler":
     st.title("🖋 Mini LaTeX Compiler")
-
     if "compiler_code" not in st.session_state:
         st.session_state.compiler_code = r"E=mc^2"
 
-    tab_editor, tab_ai = st.tabs(["✍️ Editor & Preview", "🤖 AI Helper"])
+    col_editor, col_preview = st.columns([1, 1])
+    with col_editor:
+        st.subheader("Editor")
+        st.session_state.compiler_code = st.text_area(
+            "Write your LaTeX here",
+            value=st.session_state.compiler_code,
+            height=150
+        )
+        st.code(st.session_state.compiler_code, language="latex")
+        btn_clear, btn_download = st.columns(2)
+        with btn_clear:
+            if st.button("🧹 Clear"):
+                st.session_state.compiler_code = ""
+        with btn_download:
+            st.download_button("💾 Download .tex", st.session_state.compiler_code, file_name="document.tex")
 
-    # -----------------------------
-    # Tab 1: Editor + Preview
-    # -----------------------------
-    with tab_editor:
-        col_editor, col_preview = st.columns([1, 1])
-
-        # Editor
-        with col_editor:
-            st.subheader("Editor")
-            btn_frac, btn_sum, btn_matrix = st.columns(3)
-            if btn_frac.button("➗ Fraction"):
-                st.session_state.compiler_code += "\n\\frac{a}{b}"
-            if btn_sum.button("∑ Summation"):
-                st.session_state.compiler_code += "\n\\sum_{i=1}^n"
-            if btn_matrix.button("📐 Matrix"):
-                st.session_state.compiler_code += "\n\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}"
-
-            st.session_state.compiler_code = st.text_area(
-                "Write your LaTeX here",
-                value=st.session_state.compiler_code,
-                height=150
-            )
-
-            # Show syntax-highlighted code
-            st.code(st.session_state.compiler_code, language="latex")
-
-            btn_clear, btn_download = st.columns(2)
-            with btn_clear:
-                if st.button("🧹 Clear"):
-                    st.session_state.compiler_code = ""
-            with btn_download:
-                st.download_button("💾 Download .tex", st.session_state.compiler_code, file_name="document.tex")
-
-        # Preview
-        with col_preview:
-            st.subheader("👀 Live Preview")
-            render_latex(st.session_state.compiler_code)
-
-    # -----------------------------
-    # Tab 2: AI Helper
-    # -----------------------------
-    with tab_ai:
-        st.subheader("🤖 AI Helper (Explain / Debug / Suggest)")
-        prompt = st.text_area("Describe your question or paste LaTeX to debug:", height=250, key="compiler_ai_input_tab")
-        if st.button("Ask AI about my LaTeX", key="ai_compiler_btn"):
-            full_prompt = f"""You are a helpful LaTeX assistant. The user wrote:
-
-{prompt or st.session_state.compiler_code}
-
-Tasks:
-1) If there are syntax issues, pinpoint them and show a fixed snippet.
-2) Explain briefly why.
-3) Provide 1-2 improved suggestions or best practices.
-Respond in markdown, include LaTeX fenced blocks when relevant.
-"""
-            resp_text = ask_llm_ollama(full_prompt)
-            st.markdown(resp_text, unsafe_allow_html=True)
+    with col_preview:
+        st.subheader("👀 Live Preview")
+        render_latex(st.session_state.compiler_code)
 
 # -----------------------------
 # Teacher
@@ -434,172 +370,49 @@ elif section == "Teacher":
     topic = st.selectbox("📚 Choose a topic", list(TOPICS.keys()))
     note, example = TOPICS[topic]
 
-    tab_notes, tab_ai = st.tabs(["📌 Notes & Practice", "🤖 AI Tutor"])
-
-    # -----------------------------
-    # Tab 1: Notes + Practice
-    # -----------------------------
-    with tab_notes:
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.info(note)
-            code = st.text_area("Try it here", value=example, height=250, key=f"teacher_{topic}_practice")
-        with col2:
-            st.subheader("Live Preview")
-            render_latex(code)
-
-    
-    # -----------------------------
-    # Tab 2: AI Tutor
-    # -----------------------------
-    with tab_ai:
-        st.subheader("🤖 AI Tutor")
-        st.caption("Ask me to explain, simplify, or extend the topic!")
-
-        if "tutor_history" not in st.session_state:
-            st.session_state.tutor_history = []
-
-        user_question = st.text_area(
-            "Type your question about this topic (e.g. 'Explain matrices in simple words')",
-            key=f"teacher_ai_input_{topic}"
-        )
-
-        if st.button("Ask AI Tutor", key=f"teacher_ai_btn_{topic}"):
-            full_prompt = f"""
-You are a LaTeX tutor. The student is learning the topic: **{topic}**.
-
-Here are the official notes:
-{note}
-
-Here is an example code:
-{example}
-
-Now the student asked:
-{user_question}
-
-Your tasks:
-1. Explain the concept in simple, student-friendly words.
-2. Provide a corrected or improved LaTeX snippet if useful.
-3. Add 1 short tip or best practice.
-Respond in **markdown**.
-"""
-            ai_response = ask_llm_ollama(full_prompt)
-
-            st.session_state.tutor_history.append(("Student", user_question))
-            st.session_state.tutor_history.append(("Tutor", ai_response))
-
-        # Display conversation
-        for role, msg in st.session_state.tutor_history:
-            if role == "Student":
-                st.markdown(f"**🧑 You:** {msg}")
-            else:
-                st.success(msg)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.info(note)
+        code = st.text_area("Try it here", value=example, height=250, key=f"teacher_{topic}_practice")
+    with col2:
+        st.subheader("Live Preview")
+        render_latex(code)
 
 # -----------------------------
 # Quiz
 # -----------------------------
 elif section == "Quiz":
-    import re  # <- ensure this import exists somewhere in your file
-
     st.title("🎯 LaTeX Quiz")
-    st.caption("Choose a topic, answer questions, get feedback, track progress, and generate new questions!")
-
     topic = st.selectbox("📚 Quiz Topic", list(QUIZ.keys()))
 
-    # ------------------ Session state setup ------------------
     if "score" not in st.session_state:
         st.session_state.score = 0
     if "attempted" not in st.session_state:
         st.session_state.attempted = set()
     if "review" not in st.session_state:
         st.session_state.review = []
-    # Persist a working, editable copy of the question bank across reruns
     if "quiz_data" not in st.session_state:
         st.session_state.quiz_data = {t: list(QUIZ[t]) for t in QUIZ}
 
     st.metric("Score", st.session_state.score)
 
-    # ------------------ Helpers ------------------
     def clean_label(s: str) -> str:
-        """
-        Remove a leading label like 'A) ', 'B.', 'c -', etc.
-        """
         return re.sub(r'^\s*[A-Da-d]\s*[\)\.\:\-]\s*', '', str(s)).strip()
 
     def letter_to_index(a: str):
-        """
-        Turn 'A', 'A)', 'A.' etc. into 0, 'B'->1 ...
-        Returns None if not a simple letter answer.
-        """
-        if not isinstance(a, str):
-            return None
         m = re.match(r'^\s*([A-Da-d])\s*[\)\.\:\-]?\s*$', a)
         return (ord(m.group(1).upper()) - ord('A')) if m else None
 
     def norm(s: str) -> str:
-        """
-        Normalize for comparison (trim + collapse whitespace).
-        Don't lowercase because LaTeX commands are case-sensitive, but we do
-        collapse spaces to be forgiving about spacing.
-        """
         return re.sub(r'\s+', ' ', str(s).strip())
 
-    # ------------------ Generate New Question ------------------
-    if st.button("➕ Generate New Question"):
-        prompt = f"""
-        Generate a new LaTeX quiz question on topic '{topic}'.
-        Include 4 options, mark the correct one.
-        Respond ONLY in JSON in this exact format:
-        {{
-          "q": "Question text",
-          "a": "Correct option (letter like A/B/C/D OR full option text)",
-          "options": ["A) ...", "B) ...", "C) ...", "D) ..."]
-        }}
-        """
-        new_q_json = ask_llm_ollama(prompt)
-
-        # Try to parse strict JSON; then fallback to extracting the JSON substring
-        def try_parse_json(raw: str):
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                start, end = raw.find("{"), raw.rfind("}") + 1
-                if start != -1 and end != -1:
-                    try:
-                        return json.loads(raw[start:end])
-                    except:
-                        return None
-                return None
-
-        new_q = try_parse_json(new_q_json)
-
-        # Validate & normalize the new question
-        if new_q and isinstance(new_q.get("options"), list) and new_q.get("q") and new_q.get("a"):
-            # Convert letter answer to the *text* of the corresponding option
-            idx = letter_to_index(new_q["a"])
-            if idx is not None and 0 <= idx < len(new_q["options"]):
-                # If options carry labels like "A) ...", strip them from the final answer
-                new_q["a"] = clean_label(new_q["options"][idx])
-            else:
-                # If 'a' is text, make sure it's cleaned (remove accidental labels)
-                new_q["a"] = clean_label(new_q["a"])
-
-            # Store the raw options as given; we will clean them for display on the fly
-            st.session_state.quiz_data[topic].append(new_q)
-            st.success("✅ New question added! Scroll down to answer it.")
-        else:
-            st.error(f"⚠️ Failed to generate question. Raw output:\n\n{new_q_json}")
-
-    # ------------------ Display All Questions ------------------
     q_list = st.session_state.quiz_data[topic]
 
     for q_idx, q in enumerate(q_list):
-        # Initialize radio state
         radio_key = f"selected_{topic}_{q_idx}"
         if radio_key not in st.session_state:
             st.session_state[radio_key] = None
 
-        # Safely extract only the option text (remove "A) ", "B) " if present)
         options_text = [clean_label(opt) for opt in q["options"]]
 
         with st.expander(f"Question {q_idx+1} of {len(q_list)}", expanded=True):
@@ -610,8 +423,6 @@ elif section == "Quiz":
                 if ans is None:
                     st.info("ℹ️ Please select an option first.")
                 else:
-                    # Determine the correct answer text robustly
-                    # If q["a"] is letter-like, map to option text; else clean it.
                     idx = letter_to_index(q["a"])
                     if idx is not None and 0 <= idx < len(options_text):
                         correct_text = options_text[idx]
@@ -628,12 +439,10 @@ elif section == "Quiz":
 
                     st.session_state.review.append((q["q"], correct_text, ans))
 
-    # ------------------ Review Section ------------------
     if st.session_state.review:
         with st.expander("📋 Review Attempted Questions", expanded=False):
             for qq, correct, given in st.session_state.review:
-                if norm(given) == norm(correct):  # ✅ Correct
-                    st.success(f"**Q:** {qq}\n\n✅ Correct: `{correct}`  |  📝 Your Answer: `{given}`")
-                else:  # ❌ Wrong
-                    st.error(f"**Q:** {qq}\n\n❌ Correct: `{correct}`  |  📝 Your Answer: `{given}`")
-
+                if norm(given) == norm(correct):
+                    st.success(f"**Q:** {qq}\n✅ Correct: `{correct}` | 📝 Your Answer: `{given}`")
+                else:
+                    st.error(f"**Q:** {qq}\n❌ Correct: `{correct}` | 📝 Your Answer: `{given}`")
