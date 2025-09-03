@@ -335,48 +335,159 @@ if section == "Home":
         st.markdown("- Go to Mini Compiler and paste any LaTeX.\n- Visit Teacher to learn a topic, then Quiz it!")
 
 # -----------------------------
-# Mini Compiler
+# Mini Compiler (Left/Right with Toolbar)
 # -----------------------------
 elif section == "Mini Compiler":
     st.title("🖋 Mini LaTeX Compiler")
+
     if "compiler_code" not in st.session_state:
         st.session_state.compiler_code = r"E=mc^2"
 
-    col_editor, col_preview = st.columns([1, 1])
+    col_editor, col_preview = st.columns([1, 1], gap="large")
+
+    # -----------------
+    # LEFT: Editor + Toolbar
+    # -----------------
     with col_editor:
-        st.subheader("Editor")
+        st.markdown("### ✍️ Editor")
+
+        # --- Snippet Toolbar ---
+        snippet_categories = {
+            "Algebra": {
+                "Fraction": r"\frac{a}{b}",
+                "Square Root": r"\sqrt{x}",
+                "Power": r"x^{n}",
+            },
+            "Calculus": {
+                "Summation": r"\sum_{i=1}^{n} i",
+                "Integral": r"\int_{a}^{b} f(x)\,dx",
+                "Limit": r"\lim_{x \to \infty} f(x)",
+            },
+            "Matrices": {
+                "2x2 Matrix": r"\begin{bmatrix} a & b \\ c & d \end{bmatrix}",
+                "3x3 Matrix": r"\begin{bmatrix} a & b & c \\ d & e & f \\ g & h & i \end{bmatrix}",
+            },
+            "Greek Letters": {
+                "Common": r"\alpha, \beta, \gamma, \pi, \theta",
+            },
+            "Text": {
+                "Text in Math": r"\text{Hello World!}",
+            },
+        }
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            chosen_category = st.selectbox("Snippet Category", list(snippet_categories.keys()))
+        with col2:
+            snippet_options = snippet_categories[chosen_category]
+            chosen_snippet = st.selectbox("Insert Snippet", list(snippet_options.keys()))
+            if st.button("➕ Insert Snippet", key=f"insert_{chosen_category}_{chosen_snippet}"):
+                st.session_state.compiler_code += "\n" + snippet_options[chosen_snippet]
+
+        # --- Text Area ---
         st.session_state.compiler_code = st.text_area(
-            "Write your LaTeX here",
+            "Write your LaTeX code here:",
             value=st.session_state.compiler_code,
-            height=150
+            height=250,
         )
+
+        # Show code nicely
         st.code(st.session_state.compiler_code, language="latex")
+
+        # Buttons
         btn_clear, btn_download = st.columns(2)
         with btn_clear:
             if st.button("🧹 Clear"):
                 st.session_state.compiler_code = ""
         with btn_download:
-            st.download_button("💾 Download .tex", st.session_state.compiler_code, file_name="document.tex")
+            st.download_button(
+                "💾 Download .tex",
+                st.session_state.compiler_code,
+                file_name="document.tex",
+            )
 
+    # -----------------
+    # RIGHT: Live Preview
+    # -----------------
     with col_preview:
-        st.subheader("👀 Live Preview")
+        st.markdown("### 👀 Live Preview")
+        st.markdown("---")
         render_latex(st.session_state.compiler_code)
 
+
 # -----------------------------
-# Teacher
+# Teacher (Spacious Layout)
 # -----------------------------
 elif section == "Teacher":
     st.title("📖 LaTeX Teacher")
     topic = st.selectbox("📚 Choose a topic", list(TOPICS.keys()))
     note, example = TOPICS[topic]
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
+    key_code = f"teacher_{topic}_practice"
+    if key_code not in st.session_state:
+        st.session_state[key_code] = example
+
+    # -----------------
+    # Notes & Toolbar (Stacked Vertically)
+    # -----------------
+    st.markdown("### 📖 Topic Notes")
+    with st.expander("Show/Hide Notes", expanded=True):
         st.info(note)
-        code = st.text_area("Try it here", value=example, height=250, key=f"teacher_{topic}_practice")
-    with col2:
-        st.subheader("Live Preview")
-        render_latex(code)
+
+    st.markdown("### 💻 Example Code")
+    with st.expander("Show/Hide Example", expanded=True):
+        st.code(example, language="latex")
+        if st.button("➕ Insert Example Code"):
+            st.session_state[key_code] = example
+
+    st.markdown("---")
+    st.markdown("### ✍️ Practice Editor")
+
+    # Toolbar for common LaTeX snippets
+    snippet_toolbar = {
+        "Fraction": r"\frac{a}{b}",
+        "Square Root": r"\sqrt{}",
+        "Summation": r"\sum_{}^{}",
+        "Integral": r"\int_{}^{}",
+        "Limit": r"\lim_{}",
+        "Greek α": r"\alpha",
+        "Greek β": r"\beta",
+        "Vector": r"\vec{}",
+        "Bold": r"\mathbf{}",
+    }
+
+    # Toolbar buttons in multiple rows to avoid congestion
+    snippet_cols = st.columns(5)
+    for i, (label, code_snippet) in enumerate(snippet_toolbar.items()):
+        if snippet_cols[i % 5].button(label):
+            st.session_state[key_code] += code_snippet
+
+    # Practice code area
+    st.session_state[key_code] = st.text_area(
+        "Write your LaTeX code here:",
+        value=st.session_state[key_code],
+        height=300
+    )
+
+    # Clear / Download buttons
+    btn_clear, btn_download = st.columns(2)
+    with btn_clear:
+        if st.button("🧹 Clear Editor"):
+            st.session_state[key_code] = ""
+    with btn_download:
+        st.download_button(
+            "💾 Download .tex",
+            st.session_state[key_code],
+            file_name=f"{topic.replace(' ','_')}.tex",
+        )
+
+    # -----------------
+    # Live Preview (Full Width Below)
+    # -----------------
+    st.markdown("---")
+    st.markdown("### 👀 Live Preview")
+    render_latex(st.session_state[key_code])
+
 
 # -----------------------------
 # Quiz
